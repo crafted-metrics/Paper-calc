@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Paper Value Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #007aff;
+      --success: #34c759;
+      --bg: #f2f2f7;
+      --card-bg: #ffffff;
+      --text: #1c1c1e;
+      --text-muted: #8e8e93;
+      --border: #e5e5ea;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      padding-bottom: 40px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 0;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      margin-top: 10px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-sizing: border-box;
+      background-color: #fafafa;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background-color: #fff;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .row > div {
+      flex: 1;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 10px;
+      width: 100%;
+      cursor: pointer;
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    button.secondary {
+      background-color: #e5e5ea;
+      color: var(--text);
+    }
+
+    button.danger {
+      background-color: #ff3b30;
+      color: white;
+      padding: 6px 12px;
+      font-size: 12px;
+      width: auto;
+      margin: 0;
+    }
+
+    #reader {
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #e5e5ea;
+      color: #3a3a3c;
+      margin-bottom: 12px;
+      display: block;
+      text-align: center;
+    }
+
+    .status-badge.active {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-row:last-child {
+      border-bottom: none;
+    }
+
+    .result-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--success);
+    }
+
+    .history-item {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .badge-best {
+      background: var(--success);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    #fileInput {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🧻 Paper Value Scanner</h1>
+
+  <!-- SCANNER CARD -->
+  <div class="card">
+    <div class="card-title">Barcode Scanner</div>
+    <div id="reader" class="hidden"></div>
+    <div id="status" class="status-badge">Tap scan or choose file below</div>
+    
+    <button id="scanBtn" onclick="toggleScanner()">📷 Live Camera Scan</button>
+    <button class="secondary" onclick="document.getElementById('fileInput').click()">📁 Select / Take Barcode Photo</button>
+    <input type="file" id="fileInput" accept="image/*" onchange="scanFromFile(event)">
+  </div>
+
+  <!-- PRODUCT FORM -->
+  <div class="card">
+    <div class="card-title">Product Details</div>
+    
+    <label>Barcode (UPC)</label>
+    <input type="text" id="barcode" placeholder="Scanned UPC code">
+
+    <label>Product / Brand Name</label>
+    <input type="text" id="title" placeholder="e.g. Bounty Select-a-Size">
+
+    <label>Store Price ($)</label>
+    <input type="number" id="price" step="0.01" placeholder="22.48">
+
+    <div class="row">
+      <div>
+        <label>Total Rolls</label>
+        <input type="number" id="rolls" placeholder="8">
+      </div>
+      <div>
+        <label>Sheets / Roll</label>
+        <input type="number" id="sheetsPerRoll" placeholder="123">
+      </div>
+    </div>
+
+    <label>Total Coverage (m²)</label>
+    <input type="number" id="sqm" step="0.1" placeholder="40.8">
+
+    <button onclick="calculateAndSave()">⚡ Calculate & Compare</button>
+  </div>
+
+  <!-- CURRENT RESULT -->
+  <div class="card hidden" id="resultCard">
+    <div class="card-title">Calculated Value</div>
+    <div class="result-row">
+      <span>Price per m²</span>
+      <span class="result-val" id="resSqm">-$</span>
+    </div>
+    <div class="result-row">
+      <span>Price per Sheet</span>
+      <span class="result-val" id="resSheet">-$</span>
+    </div>
+    <div class="result-row">
+      <span>Price per 100 Sheets</span>
+      <span class="result-val" id="resHundred">-$</span>
+    </div>
+  </div>
+
+  <!-- COMPARISON HISTORY -->
+  <div class="card">
+    <div class="card-title">
+      <span>Comparison History</span>
+      <button class="danger" onclick="clearHistory()">Clear All</button>
+    </div>
+    <div id="historyList">
+      <p style="color: var(--text-muted); font-size: 14px; text-align: center;">No items scanned yet.</p>
+    </div>
+  </div>
+
+<script>
+let html5QrCode = null;
+let database = JSON.parse(localStorage.getItem('paperDb_v2') || '{}');
+let history = JSON.parse(localStorage.getItem('paperHistory_v2') || '[]');
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderHistory();
+  registerServiceWorker();
+});
+
+// SERVICE WORKER FOR OFFLINE SUPPORT
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE = 'paper-calc-v1';
+      self.addEventListener('install', e => {
+        e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'])));
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+      });
+    `;
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+  }
+}
+
+// TOGGLE CAMERA SCANNER
+async function toggleScanner() {
+  const readerDiv = document.getElementById('reader');
+  const scanBtn = document.getElementById('scanBtn');
+  const status = document.getElementById('status');
+
+  if (html5QrCode && html5QrCode.isScanning) {
+    await html5QrCode.stop();
+    readerDiv.classList.add('hidden');
+    scanBtn.innerText = "📷 Live Camera Scan";
+    status.innerText = "Scanner stopped";
+    status.className = "status-badge";
+    return;
+  }
+
+  readerDiv.classList.remove('hidden');
+  status.innerText = "Opening camera... Align barcode inside box";
+  status.className = "status-badge active";
+
+  html5QrCode = new Html5Qrcode("reader");
+
+  // Specific 1D Barcode Formats for iOS/Mobile cameras
+  const config = {
+    fps: 15,
+    qrbox: { width: 300, height: 120 },
+    aspectRatio: 1.0,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.CODE_128
+    ]
+  };
+
+  try {
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        document.getElementById('barcode').value = decodedText;
+        html5QrCode.stop();
+        readerDiv.classList.add('hidden');
+        scanBtn.innerText = "📷 Live Camera Scan";
+        status.innerText = `Scanned UPC: ${decodedText}`;
+        status.className = "status-badge";
+        lookupBarcode(decodedText);
+      },
+      () => {} // Ignore scan failure frames
+    );
+    scanBtn.innerText = "🛑 Stop Camera";
+  } catch (err) {
+    status.innerText = "Camera access denied or unreadable.";
+    status.className = "status-badge";
+  }
+}
+
+// SCAN BARCODE FROM PHOTO
+async function scanFromFile(e) {
+  if (e.target.files.length === 0) return;
+  const file = e.target.files[0];
+  const status = document.getElementById('status');
+  status.innerText = "Processing image...";
+  status.className = "status-badge active";
+
+  const scanner = new Html5Qrcode("reader");
+  try {
+    const decodedText = await scanner.scanFile(file, true);
+    document.getElementById('barcode').value = decodedText;
+    status.innerText = `Found UPC: ${decodedText}`;
+    status.className = "status-badge";
+    lookupBarcode(decodedText);
+  } catch (err) {
+    status.innerText = "Could not detect barcode in photo. Try closer shot.";
+    status.className = "status-badge";
+  }
+}
+
+// LOOKUP BARCODE DETAILS
+async function lookupBarcode(upc) {
+  const status = document.getElementById('status');
+
+  // Check Local Cache First
+  if (database[upc]) {
+    status.innerText = "Loaded specs from saved memory!";
+    document.getElementById('title').value = database[upc].title || '';
+    document.getElementById('rolls').value = database[upc].rolls || '';
+    document.getElementById('sheetsPerRoll').value = database[upc].sheetsPerRoll || '';
+    document.getElementById('sqm').value = database[upc].sqm || '';
+    return;
+  }
+
+  // Fetch Open Food/Product API
+  status.innerText = "Searching product database...";
+  try {
+    let res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${upc}.json`);
+    let data = await res.json();
+
+    if (data.status === 1 && data.product) {
+      let prodName = data.product.product_name || '';
+      document.getElementById('title').value = prodName;
+      status.innerText = "Product found! Verify details below.";
+      parseSpecs(prodName);
+    } else {
+      status.innerText = "Product not in web database. Fill specs once to save!";
+    }
+  } catch (e) {
+    status.innerText = "Offline or API unreached. Enter specs manually.";
+  }
+}
+
+// REGEX SPEC PARSER
+function parseSpecs(title) {
+  let rollMatch = title.match(/(\d+)\s*(rolls|pack|pk)/i);
+  if (rollMatch) document.getElementById('rolls').value = rollMatch[1];
+
+  let sheetMatch = title.match(/(\d+)\s*(sheets|sh)/i);
+  if (sheetMatch) document.getElementById('sheetsPerRoll').value = sheetMatch[1];
+
+  let sqmMatch = title.match(/([\d\.]+)\s*(sqm|m2|m²)/i);
+  if (sqmMatch) document.getElementById('sqm').value = sqmMatch[1];
+}
+
+// CALCULATE & SAVE
+function calculateAndSave() {
+  const upc = document.getElementById('barcode').value || 'MANUAL';
+  const title = document.getElementById('title').value || 'Unlabeled Product';
+  const price = parseFloat(document.getElementById('price').value);
+  const rolls = parseFloat(document.getElementById('rolls').value) || 1;
+  const sheetsPerRoll = parseFloat(document.getElementById('sheetsPerRoll').value) || 0;
+  const sqm = parseFloat(document.getElementById('sqm').value) || 0;
+
+  if (!price) {
+    alert("Please enter the store price.");
+    return;
+  }
+
+  const totalSheets = rolls * sheetsPerRoll;
+  const costPerSheet = totalSheets > 0 ? (price / totalSheets) : 0;
+  const costPerSqm = sqm > 0 ? (price / sqm) : 0;
+  const costPerHundred = costPerSheet * 100;
+
+  // Save Specs to Local Storage Database
+  if (upc !== 'MANUAL') {
+    database[upc] = { title, rolls, sheetsPerRoll, sqm };
+    localStorage.setItem('paperDb_v2', JSON.stringify(database));
+  }
+
+  // Update Display Card
+  document.getElementById('resultCard').classList.remove('hidden');
+  document.getElementById('resSqm').innerText = costPerSqm > 0 ? `$${costPerSqm.toFixed(3)}/m²` : 'N/A';
+  document.getElementById('resSheet').innerText = costPerSheet > 0 ? `$${costPerSheet.toFixed(4)}` : 'N/A';
+  document.getElementById('resHundred').innerText = costPerSheet > 0 ? `$${costPerHundred.toFixed(2)}` : 'N/A';
+
+  // Add to History
+  history.unshift({ title, price, costPerSqm, costPerSheet, costPerHundred, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+  localStorage.setItem('paperHistory_v2', JSON.stringify(history));
+
+  renderHistory();
+}
+
+// RENDER COMPARISON HISTORY
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (history.length === 0) {
+    list.innerHTML = '<p style="color: var(--text-muted); font-size: 14px; text-align: center;">No items scanned yet.</p>';
+    return;
+  }
+
+  // Find lowest price per m²
+  let validSqms = history.map(h => h.costPerSqm).filter(v => v > 0);
+  let minSqm = validSqms.length > 0 ? Math.min(...validSqms) : 0;
+
+  list.innerHTML = history.map(item => {
+    let isBest = item.costPerSqm > 0 && item.costPerSqm === minSqm;
+    return `
+      <div class="history-item">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong>${item.title}</strong>
+          ${isBest ? '<span class="badge-best">BEST VALUE</span>' : ''}
+        </div>
+        <div style="font-size:13px; color: var(--text-muted); margin-top:4px;">
+          $${item.price.toFixed(2)} total | 
+          ${item.costPerSqm > 0 ? `<strong>$${item.costPerSqm.toFixed(3)}/m²</strong>` : ''} 
+          ${item.costPerSheet > 0 ? `($${item.costPerSheet.toFixed(4)}/sh)` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function clearHistory() {
+  history = [];
+  localStorage.removeItem('paperHistory_v2');
+  renderHistory();
+  document.getElementById('resultCard').classList.add('hidden');
+}
+</script>
+
+</body>
+</html>
+	
