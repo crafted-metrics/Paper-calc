@@ -61,7 +61,7 @@
       margin-top: 10px;
     }
 
-    input {
+    select, input {
       width: 100%;
       padding: 12px;
       font-size: 16px;
@@ -71,7 +71,7 @@
       background-color: #fafafa;
     }
 
-    input:focus {
+    select:focus, input:focus {
       outline: none;
       border-color: var(--primary);
       background-color: #fff;
@@ -108,6 +108,12 @@
       color: var(--text);
     }
 
+    button.outline-danger {
+      background-color: transparent;
+      border: 1px solid #ff3b30;
+      color: #ff3b30;
+    }
+
     button.danger {
       background-color: #ff3b30;
       color: white;
@@ -122,22 +128,29 @@
       border-radius: 8px;
       overflow: hidden;
       background: #000;
+      min-height: 200px;
     }
 
     .status-badge {
-      font-size: 12px;
-      padding: 6px 10px;
+      font-size: 13px;
+      padding: 8px 10px;
       border-radius: 6px;
       background: #e5e5ea;
       color: #3a3a3c;
       margin-bottom: 12px;
       display: block;
       text-align: center;
+      word-break: break-word;
     }
 
     .status-badge.active {
       background: #e3f2fd;
       color: #0d47a1;
+    }
+
+    .status-badge.success {
+      background: #e8f5e9;
+      color: #2e7d32;
     }
 
     .result-row {
@@ -161,11 +174,21 @@
     .history-item {
       padding: 12px;
       border-bottom: 1px solid var(--border);
-      position: relative;
     }
 
     .history-item:last-child {
       border-bottom: none;
+    }
+
+    .tag-category {
+      background: #e5e5ea;
+      color: #3a3a3c;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      margin-right: 4px;
     }
 
     .badge-best {
@@ -191,14 +214,23 @@
 
   <h1>🧻 Paper Value Scanner</h1>
 
+  <!-- CATEGORY SELECTION -->
+  <div class="card">
+    <label>Product Type</label>
+    <select id="category">
+      <option value="Toilet Paper">🧻 Toilet Paper</option>
+      <option value="Paper Towels">🧻 Paper Towels</option>
+    </select>
+  </div>
+
   <!-- SCANNER CARD -->
   <div class="card">
     <div class="card-title">Barcode Scanner</div>
     <div id="reader" class="hidden"></div>
-    <div id="status" class="status-badge">Tap scan or choose file below</div>
+    <div id="status" class="status-badge">Tap scan or upload photo below</div>
     
     <button id="scanBtn" onclick="toggleScanner()">📷 Live Camera Scan</button>
-    <button class="secondary" onclick="document.getElementById('fileInput').click()">📁 Select / Take Barcode Photo</button>
+    <button class="secondary" onclick="document.getElementById('fileInput').click()">📁 Choose or Take Barcode Photo</button>
     <input type="file" id="fileInput" accept="image/*" onchange="scanFromFile(event)">
   </div>
 
@@ -207,7 +239,7 @@
     <div class="card-title">Product Details</div>
     
     <label>Barcode (UPC)</label>
-    <input type="text" id="barcode" placeholder="Scanned UPC code">
+    <input type="text" id="barcode" placeholder="Scan or type UPC code" oninput="handleBarcodeManualInput(this.value)">
 
     <label>Product / Brand Name</label>
     <input type="text" id="title" placeholder="e.g. Bounty Select-a-Size">
@@ -230,6 +262,7 @@
     <input type="number" id="sqm" step="0.1" placeholder="40.8">
 
     <button onclick="calculateAndSave()">⚡ Calculate & Compare</button>
+    <button class="outline-danger" onclick="clearForm()">🗑️ Clear Form</button>
   </div>
 
   <!-- CURRENT RESULT -->
@@ -262,19 +295,18 @@
 
 <script>
 let html5QrCode = null;
-let database = JSON.parse(localStorage.getItem('paperDb_v2') || '{}');
-let history = JSON.parse(localStorage.getItem('paperHistory_v2') || '[]');
+let database = JSON.parse(localStorage.getItem('paperDb_v4') || '{}');
+let history = JSON.parse(localStorage.getItem('paperHistory_v4') || '[]');
 
 document.addEventListener('DOMContentLoaded', () => {
   renderHistory();
   registerServiceWorker();
 });
 
-// SERVICE WORKER FOR OFFLINE SUPPORT
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE = 'paper-calc-v1';
+      const CACHE = 'paper-calc-v4';
       self.addEventListener('install', e => {
         e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'])));
       });
@@ -287,7 +319,6 @@ function registerServiceWorker() {
   }
 }
 
-// TOGGLE CAMERA SCANNER
 async function toggleScanner() {
   const readerDiv = document.getElementById('reader');
   const scanBtn = document.getElementById('scanBtn');
@@ -308,17 +339,13 @@ async function toggleScanner() {
 
   html5QrCode = new Html5Qrcode("reader");
 
-  // Specific 1D Barcode Formats for iOS/Mobile cameras
   const config = {
-    fps: 15,
-    qrbox: { width: 300, height: 120 },
+    fps: 20,
+    qrbox: { width: 280, height: 140 },
     aspectRatio: 1.0,
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.CODE_128
-    ]
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
   };
 
   try {
@@ -326,51 +353,64 @@ async function toggleScanner() {
       { facingMode: "environment" },
       config,
       (decodedText) => {
-        document.getElementById('barcode').value = decodedText;
+        onBarcodeDetected(decodedText);
         html5QrCode.stop();
         readerDiv.classList.add('hidden');
         scanBtn.innerText = "📷 Live Camera Scan";
-        status.innerText = `Scanned UPC: ${decodedText}`;
-        status.className = "status-badge";
-        lookupBarcode(decodedText);
       },
-      () => {} // Ignore scan failure frames
+      () => {}
     );
     scanBtn.innerText = "🛑 Stop Camera";
   } catch (err) {
-    status.innerText = "Camera access denied or unreadable.";
+    status.innerText = "Camera error or permissions denied.";
     status.className = "status-badge";
   }
 }
 
-// SCAN BARCODE FROM PHOTO
 async function scanFromFile(e) {
   if (e.target.files.length === 0) return;
   const file = e.target.files[0];
   const status = document.getElementById('status');
-  status.innerText = "Processing image...";
+  status.innerText = "Analyzing photo for barcode...";
   status.className = "status-badge active";
 
   const scanner = new Html5Qrcode("reader");
   try {
     const decodedText = await scanner.scanFile(file, true);
-    document.getElementById('barcode').value = decodedText;
-    status.innerText = `Found UPC: ${decodedText}`;
-    status.className = "status-badge";
-    lookupBarcode(decodedText);
+    onBarcodeDetected(decodedText);
   } catch (err) {
-    status.innerText = "Could not detect barcode in photo. Try closer shot.";
+    status.innerText = "Could not read barcode from photo. Try taking a closer, clear shot.";
     status.className = "status-badge";
   }
 }
 
-// LOOKUP BARCODE DETAILS
+function onBarcodeDetected(upc) {
+  const cleanUpc = upc.trim();
+  document.getElementById('barcode').value = cleanUpc;
+  const status = document.getElementById('status');
+  status.innerText = `Scanned UPC: ${cleanUpc}`;
+  status.className = "status-badge success";
+  lookupBarcode(cleanUpc);
+}
+
+let lookupTimeout = null;
+function handleBarcodeManualInput(val) {
+  clearTimeout(lookupTimeout);
+  const cleanUpc = val.trim();
+  if (cleanUpc.length >= 8) {
+    lookupTimeout = setTimeout(() => {
+      lookupBarcode(cleanUpc);
+    }, 600);
+  }
+}
+
 async function lookupBarcode(upc) {
   const status = document.getElementById('status');
 
-  // Check Local Cache First
   if (database[upc]) {
-    status.innerText = "Loaded specs from saved memory!";
+    status.innerText = `Loaded "${database[upc].title}" from saved memory!`;
+    status.className = "status-badge success";
+    document.getElementById('category').value = database[upc].category || 'Toilet Paper';
     document.getElementById('title').value = database[upc].title || '';
     document.getElementById('rolls').value = database[upc].rolls || '';
     document.getElementById('sheetsPerRoll').value = database[upc].sheetsPerRoll || '';
@@ -378,26 +418,37 @@ async function lookupBarcode(upc) {
     return;
   }
 
-  // Fetch Open Food/Product API
-  status.innerText = "Searching product database...";
+  status.innerText = `Searching online database for UPC: ${upc}...`;
+  status.className = "status-badge active";
+
   try {
     let res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${upc}.json`);
     let data = await res.json();
 
     if (data.status === 1 && data.product) {
-      let prodName = data.product.product_name || '';
+      let prodName = data.product.product_name || data.product.product_name_en || '';
       document.getElementById('title').value = prodName;
-      status.innerText = "Product found! Verify details below.";
+      status.innerText = `Found: "${prodName}". Fill specs below!`;
+      status.className = "status-badge success";
+      
+      // Auto detect category from name
+      if (prodName.toLowerCase().includes('towel')) {
+        document.getElementById('category').value = 'Paper Towels';
+      } else if (prodName.toLowerCase().includes('toilet') || prodName.toLowerCase().includes('tissue')) {
+        document.getElementById('category').value = 'Toilet Paper';
+      }
+      
       parseSpecs(prodName);
     } else {
-      status.innerText = "Product not in web database. Fill specs once to save!";
+      status.innerText = `UPC ${upc} not in web database. Fill specs once to save it!`;
+      status.className = "status-badge";
     }
   } catch (e) {
-    status.innerText = "Offline or API unreached. Enter specs manually.";
+    status.innerText = `Offline mode. Enter specs for UPC ${upc} manually to save.`;
+    status.className = "status-badge";
   }
 }
 
-// REGEX SPEC PARSER
 function parseSpecs(title) {
   let rollMatch = title.match(/(\d+)\s*(rolls|pack|pk)/i);
   if (rollMatch) document.getElementById('rolls').value = rollMatch[1];
@@ -409,16 +460,16 @@ function parseSpecs(title) {
   if (sqmMatch) document.getElementById('sqm').value = sqmMatch[1];
 }
 
-// CALCULATE & SAVE
 function calculateAndSave() {
-  const upc = document.getElementById('barcode').value || 'MANUAL';
-  const title = document.getElementById('title').value || 'Unlabeled Product';
+  const category = document.getElementById('category').value;
+  const upc = document.getElementById('barcode').value.trim() || 'MANUAL';
+  const title = document.getElementById('title').value.trim() || 'Unlabeled Product';
   const price = parseFloat(document.getElementById('price').value);
   const rolls = parseFloat(document.getElementById('rolls').value) || 1;
   const sheetsPerRoll = parseFloat(document.getElementById('sheetsPerRoll').value) || 0;
   const sqm = parseFloat(document.getElementById('sqm').value) || 0;
 
-  if (!price) {
+  if (!price || isNaN(price)) {
     alert("Please enter the store price.");
     return;
   }
@@ -428,26 +479,34 @@ function calculateAndSave() {
   const costPerSqm = sqm > 0 ? (price / sqm) : 0;
   const costPerHundred = costPerSheet * 100;
 
-  // Save Specs to Local Storage Database
   if (upc !== 'MANUAL') {
-    database[upc] = { title, rolls, sheetsPerRoll, sqm };
-    localStorage.setItem('paperDb_v2', JSON.stringify(database));
+    database[upc] = { category, title, rolls, sheetsPerRoll, sqm };
+    localStorage.setItem('paperDb_v4', JSON.stringify(database));
   }
 
-  // Update Display Card
   document.getElementById('resultCard').classList.remove('hidden');
   document.getElementById('resSqm').innerText = costPerSqm > 0 ? `$${costPerSqm.toFixed(3)}/m²` : 'N/A';
   document.getElementById('resSheet').innerText = costPerSheet > 0 ? `$${costPerSheet.toFixed(4)}` : 'N/A';
   document.getElementById('resHundred').innerText = costPerSheet > 0 ? `$${costPerHundred.toFixed(2)}` : 'N/A';
 
-  // Add to History
-  history.unshift({ title, price, costPerSqm, costPerSheet, costPerHundred, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
-  localStorage.setItem('paperHistory_v2', JSON.stringify(history));
+  history.unshift({ category, title, price, costPerSqm, costPerSheet, costPerHundred });
+  localStorage.setItem('paperHistory_v4', JSON.stringify(history));
 
   renderHistory();
 }
 
-// RENDER COMPARISON HISTORY
+function clearForm() {
+  document.getElementById('barcode').value = '';
+  document.getElementById('title').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('rolls').value = '';
+  document.getElementById('sheetsPerRoll').value = '';
+  document.getElementById('sqm').value = '';
+  document.getElementById('resultCard').classList.add('hidden');
+  document.getElementById('status').innerText = "Form cleared";
+  document.getElementById('status').className = "status-badge";
+}
+
 function renderHistory() {
   const list = document.getElementById('historyList');
   if (history.length === 0) {
@@ -455,16 +514,25 @@ function renderHistory() {
     return;
   }
 
-  // Find lowest price per m²
-  let validSqms = history.map(h => h.costPerSqm).filter(v => v > 0);
-  let minSqm = validSqms.length > 0 ? Math.min(...validSqms) : 0;
+  // Calculate lowest price per m² per category
+  let minSqmByCategory = {};
+  history.forEach(item => {
+    if (item.costPerSqm > 0) {
+      if (!minSqmByCategory[item.category] || item.costPerSqm < minSqmByCategory[item.category]) {
+        minSqmByCategory[item.category] = item.costPerSqm;
+      }
+    }
+  });
 
   list.innerHTML = history.map(item => {
-    let isBest = item.costPerSqm > 0 && item.costPerSqm === minSqm;
+    let isBest = item.costPerSqm > 0 && item.costPerSqm === minSqmByCategory[item.category];
     return `
       <div class="history-item">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <strong>${item.title}</strong>
+          <div>
+            <span class="tag-category">${item.category || 'General'}</span>
+            <strong>${item.title}</strong>
+          </div>
           ${isBest ? '<span class="badge-best">BEST VALUE</span>' : ''}
         </div>
         <div style="font-size:13px; color: var(--text-muted); margin-top:4px;">
@@ -479,7 +547,7 @@ function renderHistory() {
 
 function clearHistory() {
   history = [];
-  localStorage.removeItem('paperHistory_v2');
+  localStorage.removeItem('paperHistory_v4');
   renderHistory();
   document.getElementById('resultCard').classList.add('hidden');
 }
@@ -487,4 +555,3 @@ function clearHistory() {
 
 </body>
 </html>
-	
